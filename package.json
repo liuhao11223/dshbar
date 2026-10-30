@@ -1,0 +1,92 @@
+{
+  "name": "dshbar",
+  "version": "0.1.3",
+  "description": "DSHBar · 适配 DSH 桌面端的 AI 原生轻量任务计时工具（参考 WorkBar）",
+  "author": "DSHBar Contributors",
+  "license": "MIT",
+  "main": "dist/main/main.js",
+  "bin": {
+    "dshbar-mcp": "dist/mcp/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && node scripts/copy-renderer-assets.mjs",
+    "mcp:bundle": "node scripts/build-mcp-bundle.cjs",
+    "start": "electron .",
+    "mcp": "node dist/mcp/cli.js",
+    "dev:renderer": "tsc -p tsconfig.renderer.json && node scripts/copy-renderer-assets.mjs && electron .",
+    "dist": "node scripts/build-installer.cjs",
+    "dist:installer": "node scripts/build-standalone-installer.cjs",
+    "dist:portable": "node scripts/build-portable.cjs",
+    "dist:dir": "node scripts/build-and-dir.cjs",
+    "verify": "node scripts/mcp-smoke.mjs && node scripts/launcher-verify.mjs && node scripts/sync-verify.cjs",
+    "icons": "python scripts/make_icons.py"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
+    "typescript": "^5.7.0"
+  },
+  "build": {
+    "appId": "com.dshbar.desktop",
+    "productName": "DSHBar",
+    "artifactName": "${productName} Setup ${version}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/tray.ico",
+        "to": "tray.ico"
+      },
+      {
+        "from": "assets/trayTemplate.png",
+        "to": "trayTemplate.png"
+      },
+      {
+        "from": "build/dshbar-mcp.cmd",
+        "to": "dshbar-mcp.cmd"
+      },
+      {
+        "from": "build/mcp-runtime",
+        "to": "dshbar-mcp",
+        "filter": [
+          "**/*",
+          "!**/*.map"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DSHBar",
+      "uninstallDisplayName": "DSHBar",
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
+      "include": "build/installer.nsh"
+    },
+    "portable": {
+      "artifactName": "DSHBar-portable-${version}.exe"
+    }
+  }
+}

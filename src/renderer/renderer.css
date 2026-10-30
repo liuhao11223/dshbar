@@ -1,0 +1,257 @@
+/* DSHBar · 渲染层样式：透明背景，深/浅色跟随系统。 */
+
+:root {
+  --accent: #4f8cff;
+  --accent-soft: rgba(79, 140, 255, 0.55);
+  --card-bg: rgba(248, 250, 253, 0.94);
+  --card-border: rgba(30, 40, 60, 0.12);
+  --card-shadow: 0 8px 24px rgba(20, 30, 50, 0.18);
+  --text: #1b2330;
+  --text-soft: #6b7686;
+  --ring-bg: rgba(20, 40, 80, 0.10);
+  --btn-bg: rgba(79, 140, 255, 0.10);
+  --btn-hover: rgba(79, 140, 255, 0.20);
+  --aborted: #8a8f98;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --card-bg: rgba(18, 22, 30, 0.92);
+    --card-border: rgba(255, 255, 255, 0.10);
+    --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --text: #eef2f8;
+    --text-soft: #9aa5b5;
+    --ring-bg: rgba(255, 255, 255, 0.08);
+    --btn-bg: rgba(79, 140, 255, 0.14);
+    --btn-hover: rgba(79, 140, 255, 0.26);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  color: var(--text);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
+/* ---------------- 收起态：顶部细线 ---------------- */
+.topline {
+  height: 6px;
+  width: 100%;
+  background: var(--accent-soft);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.topline:hover {
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(79, 140, 255, 0.6);
+}
+
+body.expanded .topline {
+  display: none;
+}
+
+/* ---------------- 展开态：横向任务卡 ---------------- */
+/* 高度必须与 src/main/main.ts 的 EXPANDED_HEIGHT 一致（当前 42）。 */
+.card {
+  display: none;
+  height: 42px;
+  width: 100%;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+  backdrop-filter: blur(8px);
+
+  /* 拖动窗口交给系统原生移动循环：
+     - 软件渲染下自己 setPosition 会产生残影（看起来像窗口被拉长）
+     - 自己算 CSS 像素 delta 在高 DPI 下会越跑越偏
+     代价：拖拽区不派发 click，收起请用 `—` 按钮。 */
+  -webkit-app-region: drag;
+  cursor: grab;
+}
+
+.card:active {
+  cursor: grabbing;
+}
+
+/* 卡片里的所有可交互元素必须退出拖拽区，否则点不动 */
+.card button,
+.card .nav {
+  -webkit-app-region: no-drag;
+}
+
+body.expanded .card {
+  display: flex;
+}
+
+/* 导航箭头 */
+.nav {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 5px;
+  padding: 0;
+}
+
+.nav:hover {
+  color: var(--accent);
+  background: var(--btn-bg);
+}
+
+/* 圆环 */
+.ring-wrap {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+}
+
+.ring {
+  width: 36px;
+  height: 36px;
+  transform: rotate(-90deg);
+}
+
+.ring-bg {
+  fill: none;
+  stroke: var(--ring-bg);
+  stroke-width: 4;
+}
+
+.ring-fg {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 150.796;
+  stroke-dashoffset: 150.796;
+  transition: stroke-dashoffset 0.4s linear, stroke 0.4s linear;
+}
+
+.ring-fg.flash {
+  animation: ring-flash 0.8s ease-in-out infinite;
+}
+
+@keyframes ring-flash {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.time {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  pointer-events: none;
+}
+
+/* 标题（单行，卡片 flex 居中 → 上下留白天然等距） */
+.info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 按钮 */
+.btn {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: var(--btn-bg);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s ease;
+}
+
+.btn:hover {
+  background: var(--btn-hover);
+}
+
+.btn-done {
+  color: #3aa76d;
+}
+
+.btn-ghost {
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+/* 空状态 */
+.empty {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 400;
+  padding-left: 4px;
+}
+
+/* 已取消（aborted）：环灰、整卡降饱和 */
+.card.aborted #ring-fg {
+  stroke: var(--aborted);
+}
+
+.card.aborted .title {
+  color: var(--aborted);
+}
+
+.card.aborted .btn-done {
+  opacity: 0.45;
+}

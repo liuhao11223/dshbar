@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSHBar</title>
+    <link rel="stylesheet" href="./renderer.css" />
+  </head>
+  <body class="collapsed">
+    <div id="app">
+      <!-- 收起态：顶部细线，点击展开 -->
+      <div id="topline" class="topline" role="button" aria-label="expand" tabindex="0"></div>
+
+      <!-- 展开态：横向任务卡 -->
+      <div id="card" class="card">
+        <button id="btn-prev" class="nav" aria-label="prev">‹</button>
+
+        <div id="ring-wrap" class="ring-wrap">
+          <svg class="ring" viewBox="0 0 60 60" aria-hidden="true">
+            <circle class="ring-bg" cx="30" cy="30" r="24"></circle>
+            <circle id="ring-fg" class="ring-fg" cx="30" cy="30" r="24"></circle>
+          </svg>
+          <span id="time" class="time">00:00</span>
+        </div>
+
+        <div id="info" class="info">
+          <div id="title" class="title"></div>
+        </div>
+
+        <button id="btn-toggle" class="btn" aria-label="toggle">⏸</button>
+        <button id="btn-done" class="btn btn-done" aria-label="complete">✓</button>
+        <button id="btn-collapse" class="btn btn-ghost" aria-label="collapse">—</button>
+
+        <button id="btn-next" class="nav" aria-label="next">›</button>
+      </div>
+    </div>
+
+    <script type="module" src="./renderer.js"></script>
+  </body>
+</html>
