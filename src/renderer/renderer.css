@@ -5,7 +5,6 @@
   --accent-soft: rgba(79, 140, 255, 0.55);
   --card-bg: rgba(248, 250, 253, 0.94);
   --card-border: rgba(30, 40, 60, 0.12);
-  --card-shadow: 0 8px 24px rgba(20, 30, 50, 0.18);
   --text: #1b2330;
   --text-soft: #6b7686;
   --ring-bg: rgba(20, 40, 80, 0.10);
@@ -18,7 +17,6 @@
   :root {
     --card-bg: rgba(18, 22, 30, 0.92);
     --card-border: rgba(255, 255, 255, 0.10);
-    --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     --text: #eef2f8;
     --text-soft: #9aa5b5;
     --ring-bg: rgba(255, 255, 255, 0.08);
@@ -75,7 +73,10 @@ body.expanded .topline {
 }
 
 /* ---------------- 展开态：横向任务卡 ---------------- */
-/* 高度必须与 src/main/main.ts 的 EXPANDED_HEIGHT 一致（当前 42）。 */
+/* 高度必须与 src/main/main.ts 的 EXPANDED_HEIGHT 一致（当前 42）。
+   圆角 = 高度一半（21px）→ 两端正好是两个半圆（胶囊形）。
+   不加 box-shadow：卡片贴满窗口，阴影会在窗口边界被裁掉，
+   四角留下一圈脏边——正是标注要求去掉的「阴影」。 */
 .card {
   display: none;
   height: 42px;
@@ -85,8 +86,8 @@ body.expanded .topline {
   padding: 0 6px;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 16px;
-  box-shadow: var(--card-shadow);
+  border-radius: 21px;
+  box-shadow: none;
   backdrop-filter: blur(8px);
 
   /* 拖动窗口交给系统原生移动循环：

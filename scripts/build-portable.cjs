@@ -62,9 +62,11 @@ if (explicitOut) {
   }
 }
 
+// 按当前版本过滤：目录里可能留着旧版本产物，取错文件名会误导人。
+const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).version;
 const exe = fs
   .readdirSync(path.join(ROOT, outDir))
-  .filter((f) => f.toLowerCase().endsWith('.exe') && f.includes('portable'))[0];
+  .filter((f) => f.toLowerCase().endsWith('.exe') && f.includes('portable') && f.includes(VERSION))[0];
 if (exe) {
   const full = path.join(ROOT, outDir, exe);
   console.log(`PORTABLE OK -> ${outDir}\\${exe} (${(fs.statSync(full).size / 1024 / 1024).toFixed(1)} MB)`);
