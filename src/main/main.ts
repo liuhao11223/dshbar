@@ -451,7 +451,8 @@ function buildTrayMenu(mcpLauncher: string | null): Menu {
       ],
     },
     {
-      label: `${trayText('autostart')}${storeCache.settings.launchAtLogin ? ' ✓' : ''}`,
+      // type:checkbox 自带勾选，标题里不要再拼一个 ✓（截图中出现过双勾）
+      label: trayText('autostart'),
       type: 'checkbox',
       checked: storeCache.settings.launchAtLogin,
       click: (item) => updateLaunchAtLogin(Boolean(item.checked)),
@@ -464,12 +465,19 @@ function buildTrayMenu(mcpLauncher: string | null): Menu {
     ...(mcpLauncher
       ? ([
           {
-            label: `${trayText('mcpReady')}  ·  ${path.dirname(mcpLauncher)}`,
-            enabled: false,
-          },
-          {
-            label: trayText('mcpCopy'),
-            click: () => copyMcpConfig(),
+            // 启动器完整路径放子菜单里：直接拼在主菜单行上会把整个
+            // 菜单撑到一屏宽（用户截图反馈）。悬停才展开看细节。
+            label: trayText('mcpReady'),
+            submenu: [
+              {
+                label: path.dirname(mcpLauncher),
+                enabled: false,
+              },
+              {
+                label: trayText('mcpCopy'),
+                click: () => copyMcpConfig(),
+              },
+            ],
           },
         ] as MenuItemConstructorOptions[])
       : ([
