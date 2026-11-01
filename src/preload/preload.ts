@@ -43,6 +43,8 @@ const api: DshbarApi = {
   },
   getUiState: () =>
     ipcRenderer.invoke('ui:getState') as Promise<{ dock: DockSide; dragging: boolean }>,
+  dragStart: () => ipcRenderer.send('ui:dragStart'),
+  dragEnd: () => ipcRenderer.send('ui:dragEnd'),
   detectMcp: () => ipcRenderer.invoke('mcp:detect') as Promise<boolean>,
 };
 

@@ -268,18 +268,59 @@ function navigate(step: number): void {
 el.prev.addEventListener('click', () => navigate(-1));
 el.next.addEventListener('click', () => navigate(1));
 
-/* 拖动窗口：交给系统原生拖动（CSS `-webkit-app-region: drag`，见 renderer.css）。
+/* 拖动窗口：自己接管指针，不再用系统原生拖动（`-webkit-app-region: drag`）。
  *
- * 为什么不自己算 delta 再 IPC setPosition：
- * 1. 本机 GPU 进程不可用，窗口走软件渲染；透明窗口 + 每次 mousemove 都
- *    setPosition 会让每一帧都重新合成，视觉上就是「窗口被拉长/拖出残影」。
- * 2. 自己算 delta 时用的是 CSS 像素（e.screenX），窗口按 DIP 移动，缩放比例
- *    不是 100% 时两者不相等，窗口会越跑越偏。
- * 3. 原生拖动由 Windows 的移动循环处理，多显示器 / DPI 切换都由系统负责，
- *    且不产生额外重绘。
+ * 原生拖动时窗口位置由 Windows 的移动循环托管，我们再把它改成 64×64 并居中
+ * 到光标，两边互相纠正 → 圆盘在光标两侧左右来回闪。
+ * 现在位置只有一个来源：这里 pointerdown 通知主进程「开始跟随光标」，
+ * pointerup 通知「结束」，中间每 16ms 由主进程读 screen.getCursorScreenPoint()
+ * 重新摆窗口（DIP 单位，不受页面缩放影响）。
  *
- * 代价：拖拽区不再派发 click，所以「点空白收起」改为点 `—` 按钮。
+ * 按钮上按下不算拖动，否则点 ⏸ / ✓ 也会把悬浮条缩成圆。
+ * 还要过一道 4px 位移阈值：只是点一下卡片不该把窗口搬到光标底下。
  */
+const DRAG_THRESHOLD_PX = 4;
+let dragArmed = false; // 已按下但还没越过阈值
+let dragOrigin = { x: 0, y: 0 };
+
+function endDrag(): void {
+  dragArmed = false;
+  if (!dragging) return;
+  dragging = false;
+  applyBodyClasses();
+  window.dshbar.dragEnd();
+}
+
+el.card.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  const target = e.target as Element | null;
+  if (target && target.closest('button')) return;
+  dragArmed = true;
+  // 只用来算位移量，不参与窗口定位，所以 CSS 像素足够。
+  dragOrigin = { x: e.screenX, y: e.screenY };
+  // 指针捕获：窗口缩小并跟着光标跑的过程中仍然收得到 pointermove/up
+  //（拖动中窗口被夹在工作区内，光标可能跑到圆盘外面）。
+  try {
+    el.card.setPointerCapture(e.pointerId);
+  } catch {
+    /* 捕获失败不影响拖动本体 */
+  }
+});
+
+el.card.addEventListener('pointermove', (e) => {
+  if (!dragArmed || dragging) return;
+  if (Math.hypot(e.screenX - dragOrigin.x, e.screenY - dragOrigin.y) < DRAG_THRESHOLD_PX) return;
+  dragArmed = false;
+  dragging = true;
+  applyBodyClasses();
+  window.dshbar.dragStart();
+});
+
+// 松手监听挂在 window 上：拖动中卡片本身被隐藏（body.dragging .card），
+// 挂在卡片上万一捕获被释放就收不到 pointerup 了。
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('pointercancel', endDrag);
+el.card.addEventListener('lostpointercapture', endDrag);
 
 /* ------------------------------- 数据订阅 ------------------------------- */
 

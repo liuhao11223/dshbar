@@ -320,8 +320,25 @@ function computeDockSide(): DockSide {
   const area = displayForWindow().workArea;
   const b = win.getBounds();
   if (Math.abs(b.y - area.y) <= 2) return 'top';
-  if (Math.abs(b.y + b.height - (area.y + area.height)) <= 2) return 'bottom';
+  // 底边贴住工作区下沿算靠下边；压过下沿（叠在任务栏上）也算，
+  // 随后 clampIntoWorkArea() 会把它抬回工作区里，吸附关系不会丢。
+  if (b.y + b.height >= area.y + area.height - 2) return 'bottom';
   return 'free';
+}
+
+/** 把窗口夹回当前显示器的工作区。
+ *
+ * workArea 已经把 Windows 任务栏那块区域排除掉了，所以这一步就是
+ * 「不许压住任务栏」：拖动落点、系统移动之后都走一遍。 */
+function clampIntoWorkArea(): void {
+  if (!win || win.isDestroyed()) return;
+  const b = win.getBounds();
+  const area = displayForWindow().workArea;
+  const x = Math.round(Math.min(Math.max(b.x, area.x), area.x + area.width - b.width));
+  const y = Math.round(Math.min(Math.max(b.y, area.y), area.y + area.height - b.height));
+  if (x !== b.x || y !== b.y) {
+    win.setBounds({ x, y, width: b.width, height: b.height });
+  }
 }
 
 function emitDock(): void {
@@ -337,13 +354,17 @@ function emitDock(): void {
  * 靠下边吸附时高度向上生长（底边不动），细线才能继续贴住屏幕下沿。
  */
 function applyBounds(): void {
-  if (!win) return;
+  // 拖动中窗口尺寸由 setDragging 独占（圆形盘），这里插一脚会把它拉回长条。
+  if (!win || dragging) return;
   const { height } = targetBounds();
   const area = displayForWindow().workArea;
   const cur = win.getBounds();
   const x = Math.max(area.x, Math.min(area.x + area.width - WIDTH, cur.x));
   let y = Math.max(area.y, Math.min(area.y + area.height - height, cur.y));
-  if (dockSide === 'bottom') y = Math.max(area.y, cur.y + cur.height - height);
+  if (dockSide === 'bottom') {
+    // 底边不动、向上生长；上限仍是工作区底（别压住任务栏）
+    y = Math.max(area.y, Math.min(area.y + area.height - height, cur.y + cur.height - height));
+  }
   win.setBounds({ x: Math.round(x), y: Math.round(y), width: WIDTH, height });
 }
 
@@ -359,27 +380,31 @@ function emitMode(): void {
   win?.webContents.send('ui:modeChanged', mode);
 }
 
-/** 系统拖动（-webkit-app-region）期间窗口变成圆形时间盘。
+/** 拖动期间窗口变成圆形时间盘，位置由主进程独占决定。
  *
- * 拖动开始（'will-move'）把窗口收成 DRAG_SIZE 的正方并以光标为中心；
- * 拖动循环里每次 'moved' 都重新居中到光标，让圆盘跟着指针走；
- * 250ms 没有移动视为拖动结束，恢复长条并以光标为中心落位，
- * 顺带重算吸附边（可能正好落在屏幕下沿）。
+ * 为什么放弃系统原生拖动（`-webkit-app-region: drag`）：
+ * 原生拖动时窗口位置由 Windows 的移动循环托管，它按拖动开始时记下的
+ * 「抓取偏移」摆窗口；我们同时把窗口改成 64×64 并居中到光标，两边各自
+ * 纠正对方，每一帧都差一个偏移量 —— 表现就是圆盘在光标两侧左右来回闪。
  *
- * 不用 mousedown/mouseup 判定拖动：按钮也在窗口里，mousedown 会把
- * 一次普通点击也变成「缩成圆」，点击就废了。'will-move' 只在窗口
- * 真正进入移动循环时触发。
+ * 现在改成：渲染层 pointerdown 通知主进程开始拖动，主进程按 16ms 读一次
+ * `screen.getCursorScreenPoint()` 把窗口摆到光标正中央（读取的是 DIP，
+ * 不受页面缩放影响），pointerup 结束。位置只有一个来源，所以不抖。
+ *
+ * 拖动中也不许压住任务栏：落点用 `displayNearestPoint(cursor).workArea` 夹紧。
  */
 const DRAG_SIZE = 64;
+const DRAG_FOLLOW_MS = 16;
 let dragging = false;
-let dragEndTimer: NodeJS.Timeout | null = null;
+let dragFollowTimer: NodeJS.Timeout | null = null;
 
 function centerOnCursor(size: number): void {
   if (!win || win.isDestroyed()) return;
   const c = screen.getCursorScreenPoint();
+  const area = screen.getDisplayNearestPoint(c).workArea;
+  const nx = Math.round(Math.min(Math.max(c.x - size / 2, area.x), area.x + area.width - size));
+  const ny = Math.round(Math.min(Math.max(c.y - size / 2, area.y), area.y + area.height - size));
   const b = win.getBounds();
-  const nx = Math.round(c.x - size / 2);
-  const ny = Math.round(c.y - size / 2);
   if (b.x !== nx || b.y !== ny || b.width !== size || b.height !== size) {
     win.setBounds({ x: nx, y: ny, width: size, height: size });
   }
@@ -392,13 +417,25 @@ function setDragging(next: boolean): void {
     if (win && !win.isDestroyed()) {
       if (next) {
         centerOnCursor(DRAG_SIZE);
+        if (!dragFollowTimer) {
+          dragFollowTimer = setInterval(() => centerOnCursor(DRAG_SIZE), DRAG_FOLLOW_MS);
+        }
       } else {
+        if (dragFollowTimer) {
+          clearInterval(dragFollowTimer);
+          dragFollowTimer = null;
+        }
         const h = collapsed ? COLLAPSED_HEIGHT : EXPANDED_HEIGHT;
         const c = screen.getCursorScreenPoint();
-        const area = displayForWindow().workArea;
-        const x = Math.max(area.x, Math.min(area.x + area.width - WIDTH, Math.round(c.x - WIDTH / 2)));
-        const y = Math.max(area.y, Math.min(area.y + area.height - h, Math.round(c.y - h / 2)));
+        const area = screen.getDisplayNearestPoint(c).workArea;
+        const x = Math.round(
+          Math.min(Math.max(c.x - WIDTH / 2, area.x), area.x + area.width - WIDTH),
+        );
+        const y = Math.round(
+          Math.min(Math.max(c.y - h / 2, area.y), area.y + area.height - h),
+        );
         win.setBounds({ x, y, width: WIDTH, height: h });
+        clampIntoWorkArea();
         const side = computeDockSide();
         if (side !== dockSide) {
           dockSide = side;
@@ -414,23 +451,20 @@ function setDragging(next: boolean): void {
 
 function attachDragTracking(): void {
   if (!win) return;
+  // 窗口被移动后（现在只可能来自我们自己的 setBounds 或用户改分辨率/换屏）：
+  // 重算吸附边，并保证它没有压到任务栏上。
   win.on('moved', () => {
-    if (dragging) {
-      centerOnCursor(DRAG_SIZE);
-      if (dragEndTimer) clearTimeout(dragEndTimer);
-      dragEndTimer = setTimeout(() => setDragging(false), 250);
-      return;
-    }
+    if (dragging) return;
+    clampIntoWorkArea();
     const side = computeDockSide();
     if (side !== dockSide) {
       dockSide = side;
       emitDock();
     }
   });
-  win.on('will-move', () => {
-    setDragging(true);
-    if (dragEndTimer) clearTimeout(dragEndTimer);
-    dragEndTimer = setTimeout(() => setDragging(false), 250);
+  // 拖动中丢了焦点（Alt+Tab、点到别的窗口）就别把圆盘留在屏幕上
+  win.on('blur', () => {
+    if (dragging) setDragging(false);
   });
 }
 
@@ -449,6 +483,7 @@ function broadcast(): void {
 function revealIncomingTask(title: string): void {
   trace('incoming task: ' + title);
   try {
+    if (dragging) return; // 拖动中别改尺寸，否则圆盘会被拉回长条
     if (win && !win.isDestroyed() && !win.isVisible()) win.showInactive();
     if (collapsed) setCollapsed(false);
     else applyBounds();
@@ -871,6 +906,11 @@ function registerIpc(): void {
   });
 
   ipcMain.handle('ui:getState', () => ({ dock: dockSide, dragging }));
+
+  // 拖动由渲染层的 pointerdown/pointerup 驱动（见 setDragging 的注释）：
+  // 这两个通道只开/关「窗口跟随光标」，不做位置计算。
+  ipcMain.on('ui:dragStart', () => setDragging(true));
+  ipcMain.on('ui:dragEnd', () => setDragging(false));
 
   ipcMain.handle('window:move', (_e, delta: { dx?: unknown; dy?: unknown }) => {
     if (!win) return;

@@ -90,11 +90,10 @@ body.expanded .topline {
   box-shadow: none;
   backdrop-filter: blur(8px);
 
-  /* 拖动窗口交给系统原生移动循环：
-     - 软件渲染下自己 setPosition 会产生残影（看起来像窗口被拉长）
-     - 自己算 CSS 像素 delta 在高 DPI 下会越跑越偏
-     代价：拖拽区不派发 click，收起请用 `—` 按钮。 */
-  -webkit-app-region: drag;
+  /* 拖动不再交给系统原生移动循环（`-webkit-app-region: drag`）：
+     原生拖动期间窗口位置由 Windows 托管，我们再改尺寸/位置就是两边互相
+     纠正，圆盘会在光标两侧左右来回闪。现在由渲染层 pointerdown/up 驱动
+     主进程跟随光标（见 renderer.ts 的 endDrag 与 main.ts 的 setDragging）。 */
   cursor: grab;
 }
 
@@ -102,11 +101,7 @@ body.expanded .topline {
   cursor: grabbing;
 }
 
-/* 卡片里的所有可交互元素必须退出拖拽区，否则点不动 */
-.card button,
-.card .nav {
-  -webkit-app-region: no-drag;
-}
+/* 卡片里的按钮照旧可点：拖动判定在 renderer.ts 里排除了 button */
 
 body.expanded .card {
   display: flex;
@@ -288,7 +283,6 @@ body.dragging #app {
   justify-content: center;
   position: relative;
   margin: 0 auto;
-  -webkit-app-region: drag;
   cursor: grabbing;
 }
 

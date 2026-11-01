@@ -26,11 +26,16 @@
   `webPreferences: { preload: dist/preload/preload.js, contextIsolation: true, nodeIntegration: false, sandbox: false }`。
 - 尺寸 360×42；收起态 360×6（只留顶部 6px 细线）。
 - 定位到**主显示器 workArea 顶部居中**（x 居中，y = workArea.y）；展开向下生长，不遮挡任务栏。
-- **吸附边（v0.1.6）**：`computeDockSide()` 按窗口与 workArea 的 2px 容差判定 `top` / `bottom` / `free`，
-  靠下边时 `applyBounds()` 让底边不动、向上生长，渲染层用 `body.dock-bottom` 把 6px 细线画到窗口底部。
-- **拖动圆盘（v0.1.6）**：`will-move` → `setDragging(true)`，窗口收成 `DRAG_SIZE = 64` 的正方并居中到光标；
-  `moved` 期间每帧重新居中，250ms 无位移视为松手 → 恢复 360×宽、按光标落位并重算吸附边。
-  渲染层用 `body.dragging` 隐藏细线与卡片、显示 `#disc`（圆形时间环 + 时间）。
+- **吸附边（v0.1.6）**：`computeDockSide()` 按窗口与 workArea 的容差判定 `top` / `bottom` / `free`
+  （底边贴住或压过工作区下沿都算 `bottom`），靠下边时 `applyBounds()` 让底边不动、向上生长，
+  渲染层用 `body.dock-bottom` 把 6px 细线画到窗口底部。
+- **不许压住任务栏（v0.1.7）**：`clampIntoWorkArea()` 在窗口每次被移动后把 x/y 夹回 `workArea`
+  （workArea 已排除任务栏）；`applyBounds()` 的靠下边分支也带这个上限。
+- **拖动圆盘（v0.1.6 起，v0.1.7 换实现）**：渲染层 `pointerdown`（过 4px 阈值、排除按钮）→ `ui:dragStart`；
+  主进程 `setDragging(true)` 把窗口收成 `DRAG_SIZE = 64` 的正方，并每 16ms 用 `screen.getCursorScreenPoint()`
+  重新居中到光标（`ui:dragEnd` 结束）。松手后恢复 360×宽度、按光标落位、夹回工作区并重算吸附边。
+  **不要改回 `-webkit-app-region: drag`**：原生移动循环按「抓取偏移」摆窗口，我们自己的 setBounds 又按光标摆，
+  两边互相纠正 → 圆盘左右来回闪。渲染层用 `body.dragging` 隐藏细线与卡片、显示 `#disc`（圆形时间环 + 时间）。
 - 默认开机为**收起态**（若已有未完成任务则展开，`hasOpenTask()`）。双击托盘 / `Alt+W` / 单击细线 切换形态。
 
 ### 2. 圆环与计时

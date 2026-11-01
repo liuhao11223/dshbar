@@ -75,6 +75,9 @@ export interface DshbarApi {
   onDockChanged(cb: (side: DockSide) => void): () => void;
   /** 启动时取一次当前 UI 状态（dock/dragging），避免错过 reveal 前的广播。 */
   getUiState(): Promise<{ dock: DockSide; dragging: boolean }>;
+  /** 拖动开始/结束：渲染层按下卡片时通知主进程接管「窗口跟随光标」。 */
+  dragStart(): void;
+  dragEnd(): void;
   /** 系统 PATH 中是否存在 dshbar-mcp.cmd（可接入 DSH） */
   detectMcp(): Promise<boolean>;
 }
