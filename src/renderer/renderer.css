@@ -256,3 +256,53 @@ body.expanded .card {
 .card.aborted .btn-done {
   opacity: 0.45;
 }
+
+/* ---------------- 靠边吸附：细线贴住对应的屏幕边 ---------------- */
+/* 窗口靠下边时把内容压到底部：细线正好落在窗口（= 屏幕）下沿。
+   高度变化时 main.ts 的 applyBounds 让底边不动、向上生长，所以细线始终贴边。 */
+body.dock-bottom #app {
+  justify-content: flex-end;
+}
+
+/* ---------------- 拖动中：圆形时间盘 ---------------- */
+/* 拖动时主进程把窗口收成 64×64（main.ts DRAG_SIZE），此时只显示圆盘：
+   长条被塞进方块里会左右裁切，圆形既避免裁切，又能把时间环顶到中间。 */
+body.dragging .topline,
+body.dragging .card {
+  display: none !important;
+}
+
+body.dragging #app {
+  justify-content: center;
+}
+
+.disc {
+  display: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(8px);
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin: 0 auto;
+  -webkit-app-region: drag;
+  cursor: grabbing;
+}
+
+body.dragging .disc {
+  display: flex;
+}
+
+/* 圆盘里的环放大到 52px（卡片里是 36px）：圆盘 64 减去两侧留白 */
+.disc .ring-wrap,
+.disc .ring {
+  width: 52px;
+  height: 52px;
+}
+
+.disc .time {
+  font-size: 12px;
+}

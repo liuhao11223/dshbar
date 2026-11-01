@@ -33,6 +33,17 @@
 
         <button id="btn-next" class="nav" aria-label="next">›</button>
       </div>
+
+      <!-- 拖动中：圆形时间盘（主进程把窗口收成 64x64 时显示） -->
+      <div id="disc" class="disc" aria-hidden="true">
+        <div class="disc-ring ring-wrap">
+          <svg class="ring" viewBox="0 0 60 60" aria-hidden="true">
+            <circle class="ring-bg" cx="30" cy="30" r="24"></circle>
+            <circle id="ring-fg-disc" class="ring-fg" cx="30" cy="30" r="24"></circle>
+          </svg>
+          <span id="time-disc" class="time">00:00</span>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="./renderer.js"></script>

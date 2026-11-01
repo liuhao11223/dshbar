@@ -1,6 +1,6 @@
 {
   "name": "dshbar",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "DSHBar · 适配 DSH 桌面端的 AI 原生轻量任务计时工具（参考 WorkBar）",
   "author": "DSHBar Contributors",
   "license": "MIT",

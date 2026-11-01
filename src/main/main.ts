@@ -34,6 +34,7 @@ import type {
   Settings,
   Lang,
   WindowMode,
+  DockSide,
 } from '../shared/types';
 
 const WIDTH = 360;
@@ -307,12 +308,33 @@ function displayForWindow(): Electron.Display {
   return screen.getPrimaryDisplay();
 }
 
+/** 吸附边：窗口贴着工作区上/下边（容差 2px）时认为 docked，否则自由悬浮。
+ *
+ * 用途：收起态的 6px 细线要贴着对应屏幕边（靠下边时细线在窗口底部），
+ * 而不是永远画在窗口顶部。
+ */
+let dockSide: DockSide = 'top';
+
+function computeDockSide(): DockSide {
+  if (!win || win.isDestroyed()) return dockSide;
+  const area = displayForWindow().workArea;
+  const b = win.getBounds();
+  if (Math.abs(b.y - area.y) <= 2) return 'top';
+  if (Math.abs(b.y + b.height - (area.y + area.height)) <= 2) return 'bottom';
+  return 'free';
+}
+
+function emitDock(): void {
+  win?.webContents.send('ui:dockChanged', dockSide);
+}
+
 /** 平滑地修正窗口尺寸：保持当前左上角位置不变，只改高度。
  *
  * 之前在每次展开 / 收起时都重新计算「主屏水平居中」，导致两个问题：
  * 1. 用户把卡片拖到别处后，一收起 / 一展开就跳回屏幕中间；
  * 2. 在副屏上操作时窗口会跳回主屏。
  * 现在只在窗口还不存在（首次创建）时才居中。
+ * 靠下边吸附时高度向上生长（底边不动），细线才能继续贴住屏幕下沿。
  */
 function applyBounds(): void {
   if (!win) return;
@@ -320,7 +342,8 @@ function applyBounds(): void {
   const area = displayForWindow().workArea;
   const cur = win.getBounds();
   const x = Math.max(area.x, Math.min(area.x + area.width - WIDTH, cur.x));
-  const y = Math.max(area.y, Math.min(area.y + area.height - height, cur.y));
+  let y = Math.max(area.y, Math.min(area.y + area.height - height, cur.y));
+  if (dockSide === 'bottom') y = Math.max(area.y, cur.y + cur.height - height);
   win.setBounds({ x: Math.round(x), y: Math.round(y), width: WIDTH, height });
 }
 
@@ -334,6 +357,81 @@ function setCollapsed(next: boolean): void {
 function emitMode(): void {
   const mode: WindowMode = collapsed ? 'collapsed' : 'expanded';
   win?.webContents.send('ui:modeChanged', mode);
+}
+
+/** 系统拖动（-webkit-app-region）期间窗口变成圆形时间盘。
+ *
+ * 拖动开始（'will-move'）把窗口收成 DRAG_SIZE 的正方并以光标为中心；
+ * 拖动循环里每次 'moved' 都重新居中到光标，让圆盘跟着指针走；
+ * 250ms 没有移动视为拖动结束，恢复长条并以光标为中心落位，
+ * 顺带重算吸附边（可能正好落在屏幕下沿）。
+ *
+ * 不用 mousedown/mouseup 判定拖动：按钮也在窗口里，mousedown 会把
+ * 一次普通点击也变成「缩成圆」，点击就废了。'will-move' 只在窗口
+ * 真正进入移动循环时触发。
+ */
+const DRAG_SIZE = 64;
+let dragging = false;
+let dragEndTimer: NodeJS.Timeout | null = null;
+
+function centerOnCursor(size: number): void {
+  if (!win || win.isDestroyed()) return;
+  const c = screen.getCursorScreenPoint();
+  const b = win.getBounds();
+  const nx = Math.round(c.x - size / 2);
+  const ny = Math.round(c.y - size / 2);
+  if (b.x !== nx || b.y !== ny || b.width !== size || b.height !== size) {
+    win.setBounds({ x: nx, y: ny, width: size, height: size });
+  }
+}
+
+function setDragging(next: boolean): void {
+  if (dragging === next) return;
+  dragging = next;
+  try {
+    if (win && !win.isDestroyed()) {
+      if (next) {
+        centerOnCursor(DRAG_SIZE);
+      } else {
+        const h = collapsed ? COLLAPSED_HEIGHT : EXPANDED_HEIGHT;
+        const c = screen.getCursorScreenPoint();
+        const area = displayForWindow().workArea;
+        const x = Math.max(area.x, Math.min(area.x + area.width - WIDTH, Math.round(c.x - WIDTH / 2)));
+        const y = Math.max(area.y, Math.min(area.y + area.height - h, Math.round(c.y - h / 2)));
+        win.setBounds({ x, y, width: WIDTH, height: h });
+        const side = computeDockSide();
+        if (side !== dockSide) {
+          dockSide = side;
+          emitDock();
+        }
+      }
+    }
+  } catch (err) {
+    logError(err);
+  }
+  win?.webContents.send('ui:dragChanged', dragging);
+}
+
+function attachDragTracking(): void {
+  if (!win) return;
+  win.on('moved', () => {
+    if (dragging) {
+      centerOnCursor(DRAG_SIZE);
+      if (dragEndTimer) clearTimeout(dragEndTimer);
+      dragEndTimer = setTimeout(() => setDragging(false), 250);
+      return;
+    }
+    const side = computeDockSide();
+    if (side !== dockSide) {
+      dockSide = side;
+      emitDock();
+    }
+  });
+  win.on('will-move', () => {
+    setDragging(true);
+    if (dragEndTimer) clearTimeout(dragEndTimer);
+    dragEndTimer = setTimeout(() => setDragging(false), 250);
+  });
 }
 
 function broadcast(): void {
@@ -386,6 +484,7 @@ function createWindow(): void {
 
   win.setAlwaysOnTop(true, 'screen-saver');
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  attachDragTracking();
 
   // 显示窗口：透明窗口的 `ready-to-show` 在部分环境（软件渲染、无 GPU、
   // 某些远程桌面会话）不会触发，只靠它会出现「进程在跑但看不见任何东西」。
@@ -396,7 +495,9 @@ function createWindow(): void {
     shown = true;
     try {
       win?.showInactive();
+      dockSide = computeDockSide();
       emitMode();
+      emitDock();
       trace('window revealed via ' + why);
     } catch (err) {
       logError(err);
@@ -768,6 +869,8 @@ function registerIpc(): void {
   ipcMain.handle('ui:setCollapsed', (_e, next: boolean) => {
     setCollapsed(Boolean(next));
   });
+
+  ipcMain.handle('ui:getState', () => ({ dock: dockSide, dragging }));
 
   ipcMain.handle('window:move', (_e, delta: { dx?: unknown; dy?: unknown }) => {
     if (!win) return;

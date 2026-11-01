@@ -1,7 +1,7 @@
 // DSHBar · preload：通过 contextBridge 向渲染层暴露受限 API。
 // 以 CommonJS 编译（tsconfig.json），在 contextIsolation 下运行。
 import { contextBridge, ipcRenderer } from 'electron';
-import type { DshbarApi, StoreFile, TaskAction, Settings, WindowMode } from '../shared/types';
+import type { DshbarApi, StoreFile, TaskAction, Settings, WindowMode, DockSide } from '../shared/types';
 
 const api: DshbarApi = {
   getStore: () => ipcRenderer.invoke('store:get') as Promise<StoreFile>,
@@ -27,6 +27,22 @@ const api: DshbarApi = {
       ipcRenderer.removeListener('ui:modeChanged', listener);
     };
   },
+  onDragChanged: (cb: (dragging: boolean) => void) => {
+    const listener = (_e: unknown, dragging: boolean) => cb(dragging);
+    ipcRenderer.on('ui:dragChanged', listener);
+    return () => {
+      ipcRenderer.removeListener('ui:dragChanged', listener);
+    };
+  },
+  onDockChanged: (cb: (side: DockSide) => void) => {
+    const listener = (_e: unknown, side: DockSide) => cb(side);
+    ipcRenderer.on('ui:dockChanged', listener);
+    return () => {
+      ipcRenderer.removeListener('ui:dockChanged', listener);
+    };
+  },
+  getUiState: () =>
+    ipcRenderer.invoke('ui:getState') as Promise<{ dock: DockSide; dragging: boolean }>,
   detectMcp: () => ipcRenderer.invoke('mcp:detect') as Promise<boolean>,
 };
 

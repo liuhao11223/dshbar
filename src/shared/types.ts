@@ -57,6 +57,9 @@ export type TaskAction =
 /** 窗口形态：展开为任务卡，收起为顶部细线。 */
 export type WindowMode = 'expanded' | 'collapsed';
 
+/** 悬浮窗与屏幕工作区边缘的吸附关系：靠上边 / 靠下边 / 自由悬浮。 */
+export type DockSide = 'top' | 'bottom' | 'free';
+
 /** preload 通过 contextBridge 暴露给渲染层的 API 形状。 */
 export interface DshbarApi {
   getStore(): Promise<StoreFile>;
@@ -66,6 +69,12 @@ export interface DshbarApi {
   moveWindow(dx: number, dy: number): Promise<void>;
   onChanged(cb: (store: StoreFile) => void): () => void;
   onModeChanged(cb: (mode: WindowMode) => void): () => void;
+  /** 拖动开始/结束（拖动中窗口变为圆形时间盘）。 */
+  onDragChanged(cb: (dragging: boolean) => void): () => void;
+  /** 吸附边变化（top/bottom/free），收起细线贴对应屏幕边。 */
+  onDockChanged(cb: (side: DockSide) => void): () => void;
+  /** 启动时取一次当前 UI 状态（dock/dragging），避免错过 reveal 前的广播。 */
+  getUiState(): Promise<{ dock: DockSide; dragging: boolean }>;
   /** 系统 PATH 中是否存在 dshbar-mcp.cmd（可接入 DSH） */
   detectMcp(): Promise<boolean>;
 }

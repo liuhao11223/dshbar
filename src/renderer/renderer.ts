@@ -5,7 +5,7 @@
  * setInterval 本地推进 running 任务的秒数显示，不向后端轮询。
  */
 import { messages, type MessageKey } from '../shared/i18n.js';
-import type { StoreFile, Task, WindowMode } from '../shared/types';
+import type { StoreFile, Task, WindowMode, DockSide } from '../shared/types';
 
 const RING_CIRCUMFERENCE = 2 * Math.PI * 24; // 与 CSS 中 r=24 对应
 
@@ -18,18 +18,31 @@ const el = {
   done: document.getElementById('btn-done') as HTMLButtonElement,
   collapse: document.getElementById('btn-collapse') as HTMLButtonElement,
   ringFg: document.querySelector<SVGCircleElement>('#ring-fg')!,
+  ringFgDisc: document.querySelector<SVGCircleElement>('#ring-fg-disc')!,
   time: document.getElementById('time') as HTMLSpanElement,
+  timeDisc: document.getElementById('time-disc') as HTMLSpanElement,
   title: document.getElementById('title') as HTMLDivElement,
 };
 
 let store: StoreFile | null = null;
 let mode: WindowMode = window.innerHeight <= 10 ? 'collapsed' : 'expanded';
+let dock: DockSide = 'top';
+let dragging = false;
 let viewIdx = 0;
 let manualNav = false;
 let lastRunningId: string | null = null;
 let anchor = { id: '', elapsed: 0, at: 0 };
 
 document.body.classList.toggle('expanded', mode === 'expanded');
+
+/* ------------------------------- 形态 class ------------------------------- */
+
+function applyBodyClasses(): void {
+  document.body.classList.toggle('expanded', mode === 'expanded');
+  document.body.classList.toggle('dock-bottom', dock === 'bottom');
+  document.body.classList.toggle('dock-free', dock === 'free');
+  document.body.classList.toggle('dragging', dragging);
+}
 
 /* ------------------------------- 工具 ------------------------------- */
 
@@ -117,9 +130,18 @@ function msg(key: MessageKey): string {
 
 function setRing(frac: number, color: string, overdue: boolean): void {
   const clamped = Math.min(1, Math.max(0, frac));
-  el.ringFg.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - clamped));
-  el.ringFg.style.stroke = color;
-  el.ringFg.classList.toggle('flash', overdue);
+  for (const circle of [el.ringFg, el.ringFgDisc]) {
+    if (!circle) continue;
+    circle.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - clamped));
+    circle.style.stroke = color;
+    circle.classList.toggle('flash', overdue);
+  }
+}
+
+/** 时间文本同时写卡片环和拖动圆盘（两个环共用同一份计时状态）。 */
+function setTime(text: string): void {
+  el.time.textContent = text;
+  if (el.timeDisc) el.timeDisc.textContent = text;
 }
 
 /** 标题文本：已取消的任务把状态并进标题里（卡片已不再显示第二行说明）。 */
@@ -136,7 +158,7 @@ function render(): void {
   if (!task) {
     el.title.classList.add('empty');
     el.title.textContent = msg('task.none');
-    el.time.textContent = '--:--';
+    setTime('--:--');
     setRing(0, colorFor(0), false);
     el.toggle.textContent = '⏸';
     el.toggle.disabled = true;
@@ -151,7 +173,7 @@ function render(): void {
 
   el.title.classList.remove('empty');
   el.title.textContent = titleText(task);
-  el.time.textContent = fmt(displayElapsed(task));
+  setTime(fmt(displayElapsed(task)));
 
   const ring = ringState(task);
   setRing(ring.frac, ring.color, ring.overdue);
@@ -174,7 +196,7 @@ function render(): void {
 function tick(): void {
   const task = viewedTask();
   if (!task || task.status !== 'running') return;
-  el.time.textContent = fmt(displayElapsed(task));
+  setTime(fmt(displayElapsed(task)));
   const ring = ringState(task);
   setRing(ring.frac, ring.color, ring.overdue);
 }
@@ -269,12 +291,32 @@ window.dshbar.onChanged((next) => {
 
 window.dshbar.onModeChanged((nextMode) => {
   mode = nextMode;
-  document.body.classList.toggle('expanded', mode === 'expanded');
+  applyBodyClasses();
+});
+
+window.dshbar.onDockChanged((side) => {
+  dock = side;
+  applyBodyClasses();
+});
+
+window.dshbar.onDragChanged((next) => {
+  dragging = next;
+  applyBodyClasses();
 });
 
 /* ------------------------------- 启动 ------------------------------- */
 
 void (async () => {
+  // 先取一次 UI 状态：reveal() 可能在渲染层订阅之前就广播过 dock，
+  // 不补这一次初始值，靠下边启动的实例细线会画错边。
+  try {
+    const ui = await window.dshbar.getUiState();
+    dock = ui.dock;
+    dragging = ui.dragging;
+  } catch {
+    /* 主进程未就绪则保持默认 */
+  }
+  applyBodyClasses();
   store = await window.dshbar.getStore();
   syncView(store);
   render();

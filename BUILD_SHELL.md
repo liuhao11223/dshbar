@@ -26,7 +26,12 @@
   `webPreferences: { preload: dist/preload/preload.js, contextIsolation: true, nodeIntegration: false, sandbox: false }`。
 - 尺寸 360×42；收起态 360×6（只留顶部 6px 细线）。
 - 定位到**主显示器 workArea 顶部居中**（x 居中，y = workArea.y）；展开向下生长，不遮挡任务栏。
-- 默认开机为**收起态**。双击托盘 / `Alt+W` / 单击细线 切换形态。
+- **吸附边（v0.1.6）**：`computeDockSide()` 按窗口与 workArea 的 2px 容差判定 `top` / `bottom` / `free`，
+  靠下边时 `applyBounds()` 让底边不动、向上生长，渲染层用 `body.dock-bottom` 把 6px 细线画到窗口底部。
+- **拖动圆盘（v0.1.6）**：`will-move` → `setDragging(true)`，窗口收成 `DRAG_SIZE = 64` 的正方并居中到光标；
+  `moved` 期间每帧重新居中，250ms 无位移视为松手 → 恢复 360×宽、按光标落位并重算吸附边。
+  渲染层用 `body.dragging` 隐藏细线与卡片、显示 `#disc`（圆形时间环 + 时间）。
+- 默认开机为**收起态**（若已有未完成任务则展开，`hasOpenTask()`）。双击托盘 / `Alt+W` / 单击细线 切换形态。
 
 ### 2. 圆环与计时
 - SVG 圆环半径 24，周长 ≈ 150.796（CSS `stroke-dasharray` 同步）。环心文本显示 `MM:SS` / `H:MM:SS`。
