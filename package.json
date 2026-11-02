@@ -1,6 +1,6 @@
 {
   "name": "dshbar",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "DSHBar · 适配 DSH 桌面端的 AI 原生轻量任务计时工具（参考 WorkBar）",
   "author": "DSHBar Contributors",
   "license": "MIT",
@@ -19,6 +19,7 @@
     "dist:portable": "node scripts/build-portable.cjs",
     "dist:dir": "node scripts/build-and-dir.cjs",
     "verify": "node scripts/mcp-smoke.mjs && node scripts/launcher-verify.mjs && node scripts/sync-verify.cjs",
+    "preview": "node scripts/preview-renderer.cjs",
     "icons": "python scripts/make_icons.py"
   },
   "dependencies": {

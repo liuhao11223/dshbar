@@ -138,10 +138,33 @@ function setRing(frac: number, color: string, overdue: boolean): void {
   }
 }
 
+/** 环上时间的基准字号与下限（px）。 */
+const TIME_FONT_MAX = 9;
+const TIME_FONT_MIN = 7;
+const DISC_TIME_FONT = 12;
+
+/**
+ * 把时间写进圆环，并在放不下时缩小字号。
+ *
+ * 「H:MM:SS」比「MM:SS」长得多：卡片环只有 36px（内径 ≈26px），9px 的
+ * 1:01:02 会横向压到圆环甚至溢出。圆环几何固定（viewBox 60、r=24、
+ * stroke-width 4）→ 内径 = 0.733 × 环宽，这里按 0.70 留一点余量，
+ * 用 offsetWidth（不受页面缩放影响）判断是否放得下。
+ */
+function fitTime(node: HTMLElement, text: string, max: number, min: number): void {
+  node.textContent = text;
+  const wrap = node.parentElement;
+  const budget = wrap ? wrap.clientWidth * 0.7 : 0;
+  for (let size = max; size >= min; size -= 0.5) {
+    node.style.fontSize = `${size}px`;
+    if (!budget || node.offsetWidth <= budget) return;
+  }
+}
+
 /** 时间文本同时写卡片环和拖动圆盘（两个环共用同一份计时状态）。 */
 function setTime(text: string): void {
-  el.time.textContent = text;
-  if (el.timeDisc) el.timeDisc.textContent = text;
+  fitTime(el.time, text, TIME_FONT_MAX, TIME_FONT_MIN);
+  if (el.timeDisc) fitTime(el.timeDisc, text, DISC_TIME_FONT, TIME_FONT_MIN);
 }
 
 /** 标题文本：已取消的任务把状态并进标题里（卡片已不再显示第二行说明）。 */
@@ -153,11 +176,39 @@ function titleText(task: Task): string {
   return task.title;
 }
 
+/** 标题字号收缩的上下限（px）。CSS 里的基准是 13px。 */
+const TITLE_FONT_MAX = 13;
+const TITLE_FONT_MIN = 10;
+
+/**
+ * 写入标题，并在放不下时逐级缩小字号，尽量把整句话显示完。
+ *
+ * 卡片只有 360px 宽，标题区约 230px：13px 下大约 17 个汉字，而 AI 生成的
+ * 任务标题常有二十多个字，直接截断就成了「显示不全」。这里在 13px→10px
+ * 之间找第一个能放下的字号；到下限仍放不下才由 CSS 的 ellipsis 收尾
+ * （同时 title 属性给出悬停全文兜底）。
+ */
+function setTitle(text: string): void {
+  el.title.classList.remove('empty');
+  el.title.textContent = text;
+  el.title.title = text;
+  el.title.style.fontSize = '';
+  if (el.title.scrollWidth <= el.title.clientWidth) return;
+  for (let size = TITLE_FONT_MAX - 0.5; size >= TITLE_FONT_MIN; size -= 0.5) {
+    el.title.style.fontSize = `${size}px`;
+    if (el.title.scrollWidth <= el.title.clientWidth) return;
+  }
+}
+
 function render(): void {
   const task = viewedTask();
   if (!task) {
     el.title.classList.add('empty');
     el.title.textContent = msg('task.none');
+    el.title.title = '';
+    el.title.style.fontSize = '';
+    // 空状态没有「上一个/下一个」可分页，箭头纯占位
+    el.card.classList.add('single');
     setTime('--:--');
     setRing(0, colorFor(0), false);
     el.toggle.textContent = '⏸';
@@ -171,8 +222,9 @@ function render(): void {
     return;
   }
 
-  el.title.classList.remove('empty');
-  el.title.textContent = titleText(task);
+  // 只有一个任务时收起左右箭头，把宽度让给标题（见 CSS 的 .card.single）
+  el.card.classList.toggle('single', activeTasks(store!).length <= 1);
+  setTitle(titleText(task));
   setTime(fmt(displayElapsed(task)));
 
   const ring = ringState(task);

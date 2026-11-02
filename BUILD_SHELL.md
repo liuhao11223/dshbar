@@ -42,6 +42,14 @@
 - SVG 圆环半径 24，周长 ≈ 150.796（CSS `stroke-dasharray` 同步）。环心文本显示 `MM:SS` / `H:MM:SS`。
 - 倒计时：剩余比例填环，颜色随剩余比例绿→红；超时红色闪烁（`.flash`）。
 - 正计时：按小时为周期填满一圈，颜色随用时绿→黄→红。
+- **文本放不下要缩字号，别让它溢出**（v0.1.8）：
+  - 标题：`renderer.ts` 的 `setTitle()` 在 13px→10px 之间找第一个放得下的字号；到下限才交给 `text-overflow: ellipsis`，同时写 `title` 属性做悬停兜底。
+    卡片只有一个任务时 `el.card` 加 `.single`，CSS 收起 `‹ ›` 两个占位箭头，把 36px 让给标题（标题区 192px → 234px）。
+  - 环上时间：`fitTime()` 用 `node.offsetWidth <= 环宽 × 0.7` 判断（圆环 viewBox 60、r=24、stroke-width 4 → 内径 = 0.733×环宽）。
+    9px 的 `1:01:02` 约 30px > 36px 环的内径 26px，会压到环上并溢出环外，所以要缩到 7.5px（拖动圆盘里是 12px→11px）。
+    用 `offsetWidth` 而不是 `getBoundingClientRect()`：前者是布局尺寸，不受页面缩放/变换影响。
+  - `.time` 因此改成 `left: 50% + translateX(-50%)`（宽度贴合文字），否则 `inset: 0` 让它永远和环等宽，量不出文本真实宽度。
+  - 标题 `line-height: 1.35`：等于字号时行盒 13px < 字体 em 盒 ≈17px，half-leading 为负，`overflow: hidden` 会削掉字形上下各约 2px。
 - 主进程每秒 tick 一次：用 `tickRunning()` 在内存累计 running 任务的 `elapsedSeconds` 并广播
   `store:changed`（渲染层**不做后端轮询**）；渲染层用 `setInterval` 在两次推送之间本地推进显示。
 - 为防崩溃丢秒，主进程每秒原子落盘；`before-quit` 再写一次。

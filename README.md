@@ -65,6 +65,17 @@ npm run mcp            # 单独启动 MCP 服务器（stdio，调试用）
 
 异常状态：超时（倒计时走完）圆环**画满一圈红色并闪烁**；已取消任务显示灰色 `✕ 已取消`，完成按钮禁用。
 
+### 关于中间的任务标题（v0.1.8）
+
+标题区只有两百多像素：卡片总宽 360px，减去圆环（36）与三个按钮（3×22）后剩约 234px，13px 字号只放得下 17 个汉字。而 AI 生成的任务标题常有二十多字，以前就会被省略号截断 —— 看起来就是「中间文字显示不全」。现在：
+
+- **字号自适应**：13px 放不下时逐级缩到 10px（约 24 个汉字），能放完就完整显示；到下限还放不下才用省略号。
+- **只有一个任务时收起 `‹ ›`**：单任务时这两个箭头本来就是禁用的占位，收起来正好把 36px 让给标题。
+- **悬停看全文**：标题元素带 `title` 属性，鼠标停一下会弹出完整标题。
+- **圆环里的时间也会自适应**：`H:MM:SS` 比 `MM:SS` 长得多（9px 的 `1:01:02` 约有 30px，而 36px 圆环的内径只有 26px），以前会横向压到圆环上、溢出到环外。现在按圆环内径（0.7×环宽）判断，放不下就缩到 7.5px。
+
+顺带把标题的 `line-height` 从 `1` 提到 `1.35`：`line-height` 等于字号时行盒只有 13px，而字体本身的 em 盒（ascent+descent）约 17px，half-leading 是负值，`overflow: hidden` 会在字形上下各削掉约 2px —— 换个字体或字重就有可能看出「字被切了」。
+
 ### 关于吸附与拖动（v0.1.6 / v0.1.7）
 
 两条形态规则，都跟窗口贴在屏幕的哪一侧有关：
@@ -237,6 +248,7 @@ dshbar/
 | `node scripts/mcp-smoke.mjs` | MCP 协议层自测（7 项） |
 | `node scripts/launcher-verify.mjs` | 用**打包产物**的 `dshbar-mcp.cmd` 跑完整 stdio 会话 |
 | `node scripts/sync-verify.cjs` | **GUI ↔ MCP 双向同步**：起真实 Electron 窗口 + MCP 进程，验证计时推进、暂停、恢复、完成 |
+| `npm run preview` | **不启动 Electron 的渲染层预览**：把 `dist/renderer` 用 http 暴露出来，浏览器打开就能看布局 / 截图 / 量尺寸（见下） |
 
 四道验证全部通过（本仓库当前状态）：
 
@@ -247,6 +259,25 @@ node scripts/mcp-smoke.mjs      SMOKE OK               (7/7 PASS)
 node scripts/launcher-verify.mjs  LAUNCHER VERIFY: PASS
 node scripts/sync-verify.cjs    SYNC VERIFY: PASS      (6/6)
 ```
+
+### 渲染层离线预览（`npm run preview`）
+
+Electron 的 Chromium 沙箱在一些环境里起不来（进程静默退出、`startup.log` 一行都没有），窗口根本没法目视核对。`scripts/preview-renderer.cjs` 绕开这一层：它只依赖 Node 内置模块，把 `dist/renderer` 通过 http 暴露出去，并在返回 `index.html` 时现场注入 `scripts/preview/stub.js`（`window.dshbar` 的打桩实现）与一块浅色舞台，于是**真实的 renderer.js + renderer.css** 就能在任意浏览器里跑起来。
+
+```bash
+npm run build          # 或 tsc -p tsconfig.renderer.json && node scripts/copy-renderer-assets.mjs
+npm run preview        # http://127.0.0.1:8791/renderer/__preview.html
+```
+
+页面里的调试钩子（控制台或自动化脚本都能用）：
+
+| 钩子 | 作用 |
+| --- | --- |
+| `__setTitle('很长的任务标题')` | 换标题，看自适应字号与截断 |
+| `__setTime(3661)` | 换时长，看 `H:MM:SS` 在圆环里放不放得下 |
+| `__setTasks([...])` | 换整份任务列表（空数组 = 空状态） |
+| `__setDragging(true)` | 切到拖动圆盘形态 |
+| `__setDock('bottom')` | 切吸附边 |
 
 ### 环境变量
 
